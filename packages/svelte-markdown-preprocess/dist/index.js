@@ -1,0 +1,55 @@
+import fm from 'front-matter';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { md } from './markdown.js';
+import { SvelteFile } from './svelte-file.js';
+const resolveLayout = (layout, layouts) => {
+    if (!layouts) {
+        return;
+    }
+    return layouts[layout || 'default'];
+};
+const SCRIPT_BODY_REGEX = /<script.*>(?<body>(.|\n)*?)<\/script>/;
+const parse = (content) => {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
+    const { attributes, body: bodyParsed } = fm(content);
+    let scriptBody = '';
+    let body = bodyParsed;
+    const match = SCRIPT_BODY_REGEX.exec(body);
+    const bodyGroup = match?.groups?.body;
+    if (bodyGroup) {
+        scriptBody = bodyGroup.trim();
+        body = body.substring(match.index + match[0].length).trim();
+    }
+    return { attributes, body, scriptBody };
+};
+export const svelteMarkdownPreprocess = (options) => {
+    const { layouts, debugPath, markdownPackageName = '@immich/ui' } = options || {};
+    return {
+        name: '@immich/svelte-markdown-preprocess',
+        async markup({ content, filename }) {
+            if (!filename?.endsWith('.md')) {
+                return;
+            }
+            const { attributes, body, scriptBody } = parse(content);
+            const markup = await md.parse(body);
+            const file = new SvelteFile();
+            file.addScript(`import { Markdown } from '${markdownPackageName}';`);
+            const layout = resolveLayout(attributes.layout, layouts);
+            if (layout) {
+                file.addScript(`import Layout from '${layout}';`);
+                file.addTag(`<Layout attributes={${JSON.stringify(attributes)}}>`, '</Layout>');
+            }
+            file.addScript(scriptBody);
+            file.addTemplate(markup);
+            const code = file.export();
+            if (debugPath) {
+                const dir = dirname(debugPath);
+                mkdirSync(dir, { recursive: true });
+                writeFileSync(debugPath, code);
+            }
+            return { code };
+        },
+    };
+};
