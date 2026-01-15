@@ -18,7 +18,8 @@
     "check": "npm run sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "npm run sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest",
-    "sync": "svelte-kit sync"
+    "sync": "svelte-kit sync",
+    "prepare": "pnpm run build"
   },
   "files": [
     "dist",
